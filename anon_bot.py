@@ -1,5 +1,7 @@
 import logging
 import os
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
 from telegram import Update
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, MessageHandler,
@@ -10,12 +12,24 @@ from telegram.ext import (
 BOT_TOKEN  = os.environ["BOT_TOKEN"]
 OWNER_ID   = int(os.environ["OWNER_ID"])
 OWNER_TAG  = os.environ.get("OWNER_TAG", "@STTS84")
+PORT       = int(os.environ.get("PORT", "8000"))
 # ──────────────────────────────────────────────────────────────────────────────
 
 logging.basicConfig(level=logging.INFO)
-
-# словарь: message_id пересланного сообщения → user_id отправителя
 pending_replies: dict[int, int] = {}
+
+
+# ── Минимальный HTTP-сервер для Render (Web Service) ───────────────────────────
+class HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"Bot is running!")
+    def log_message(self, *args):
+        pass  # отключаем логи HTTP
+
+def run_http():
+    HTTPServer(("0.0.0.0", PORT), HealthHandler).serve_forever()
 
 
 # ── /start ─────────────────────────────────────────────────────────────────────
@@ -45,8 +59,8 @@ async def handle_user_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         return
 
     caption = "📨 <b>Новое анонимное сообщение:</b>"
-
     sent = None
+
     if msg.text:
         sent = await ctx.bot.send_message(OWNER_ID, f"{caption}\n\n{msg.text}", parse_mode="HTML")
     elif msg.photo:
@@ -122,6 +136,10 @@ async def handle_owner_reply(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 # ── Запуск ──────────────────────────────────────────────────────────────────────
 def main():
+    # Запускаем HTTP-сервер в фоне (нужен для Render Web Service)
+    threading.Thread(target=run_http, daemon=True).start()
+    print(f"HTTP-сервер запущен на порту {PORT}")
+
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, handle_user_message))
