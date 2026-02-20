@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: anon-bot
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python anon_bot.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: BOT_TOKEN
+        sync: false
+      - key: OWNER_ID
+        sync: false
+      - key: OWNER_TAG
+        sync: false
